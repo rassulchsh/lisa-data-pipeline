@@ -1,0 +1,152 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://example.com/schemas/turn.schema.json",
+  "title": "ConversationTurn",
+  "type": "object",
+  "required": [
+    "role"
+  ],
+  "properties": {
+    "role": {
+      "type": "string",
+      "enum": [
+        "user",
+        "assistant"
+      ]
+    },
+    "text": {
+      "type": "string"
+    },
+    "analysis": {
+      "type": "string"
+    },
+    "tool_calls": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "args"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": [
+              "create_presentation",
+              "set_agenda",
+              "insert_slide_after",
+              "edit_slide",
+              "edit_content",
+              "set_layout",
+              "set_image",
+              "reorder_slides",
+              "go_to_slide",
+              "export_pptx",
+              "get_slide_index"
+            ]
+          },
+          "args": {
+            "type": "object"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "tool_result": {
+      "type": "object",
+      "properties": {
+        "diff": {
+          "type": "object"
+        },
+        "deck_state": {
+          "$ref": "https://example.com/schemas/deck_state.schema.json"
+        }
+      },
+      "additionalProperties": false
+    },
+    "state_after": {
+      "$ref": "https://example.com/schemas/deck_state.schema.json"
+    },
+    "validation": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        },
+        "checks": {
+          "type": "object",
+          "properties": {
+            "slide_numbers": {
+              "type": "boolean"
+            },
+            "list_length_ok": {
+              "type": "boolean"
+            },
+            "image_size_ok": {
+              "type": "boolean"
+            },
+            "layout_preserve_ok": {
+              "type": "boolean"
+            },
+            "mix_within_bounds": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "lang": {
+      "type": "string",
+      "enum": [
+        "de",
+        "en"
+      ]
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "role": {
+            "const": "user"
+          }
+        },
+        "required": [
+          "role"
+        ]
+      },
+      "then": {
+        "required": [
+          "text",
+          "lang"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "role": {
+            "const": "assistant"
+          }
+        },
+        "required": [
+          "role"
+        ]
+      },
+      "then": {
+        "required": [
+          "tool_calls"
+        ]
+      }
+    }
+  ],
+  "additionalProperties": false
+}

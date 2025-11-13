@@ -1,0 +1,57 @@
+version: v1
+language_defaults:
+  en:
+    persona: ["lecturer","student"]
+    grade_band: ["undergrad","postgrad"]
+style_preamble: |
+  You are a precise JSON generator for academic mini-presentations. 
+  Always return VALID JSON only. No commentary, no code blocks.
+  Keep language concise and neutral, suitable for university context.
+
+areas_prompt: |
+  {{style_preamble}}
+  Return ONLY JSON:
+  {"areas":[{"name":"...", "themes":["...","..."]}]}
+  Constraints:
+  - 8 areas, academic breadth (e.g., Biology, CS, Economics, History, Sociology, Physics, Business, Art History).
+  - Each area: 2–3 focused sub-themes suitable for 5–8 minute talks.
+
+topics_prompt: |
+  {{style_preamble}}
+  Area: {{area}}
+  Return ONLY JSON:
+  {"area":"{{area}}","topics":[{"title":"...", "desc":"..."}]}
+  Constraints:
+  - 6–10 topics; each title is specific (not generic), academic tone.
+  - desc: 10–20 words, summarize scope and angle.
+
+agenda_prompt: |
+  {{style_preamble}}
+  Topic: {{title}}
+  Return ONLY JSON:
+  {"agenda":[{"title":"...", "bullets":["...","...","..."]}]}
+  Constraints:
+  - 2–3 agenda items; each has 3–7 bullets.
+  - Bullets: short, factual, no numbering words.
+
+slide_plan_prompt: |
+  {{style_preamble}}
+  Agenda Titles: {{agenda_titles}}
+  Return ONLY JSON:
+  {"plan":[{"agenda_title":"...", "slides":[{"layout":"TitleBullets"}]}],
+   "mix_target":{"text":0.6,"img_text":0.25,"img":0.15}}
+  Constraints:
+  - For each agenda item, choose 1–3 slides.
+  - Allowed layouts: TitleOnly, TitleBullets, TwoColumn, SplitLeftImage, SplitRightImage, FullImage, Quote
+  - Roughly match mix_target; vary layouts slightly.
+
+image_prompts_prompt: |
+  {{style_preamble}}
+  Topic: {{title}}
+  Agenda Titles: {{agenda_titles}}
+  Return ONLY JSON:
+  {"images":[{"agenda_title":"...", "prompt":"...", "style_tag":"diagram"}]}
+  Constraints:
+  - 1 image per agenda item if its plan includes Split* or FullImage; optional otherwise.
+  - style_tag in {"diagram","chalk","flat","photo"}.
+  - Prompt: concise subject+style+composition (no adjectives salad).

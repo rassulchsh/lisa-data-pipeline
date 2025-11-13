@@ -1,0 +1,25 @@
+exporter/ngrok_recovery_codes.txt
+# venv & caches
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+
+# local env
+.env
+.openapi-cache/
+
+# editor & OS
+.vscode/
+.DS_Store
+
+# datasets & exports (generated)
+dataset/dialogs/en/drafts/
+dataset/dialogs/en/processed/
+logs/
+dataset/dialogs/en/drafts_dedup
+

@@ -1,0 +1,54 @@
+import requests
+import time
+import json
+import base64
+# URL - API
+base_url = "https://stable-diffusion-1.ki-awz.iisys.de/sdapi/v1/txt2img"
+
+# Auth cookie 
+cookies = {
+    "_oauth2_proxy": "djIuWDI5aGRYUm9NbDl3Y205NGVTMDRNV0ZoTTJWbFpqTTBNRE5oTVdNME56TTBaakpsTkRkaFlqbG1OV05tWkEucy1WSTFIR1lYRG1QYTJaQzExMllsZw==|1739014816|VBZnpTT6lg_MymzdCa7GuwuuTpYWMY5jUv_KYWoVAh4="
+}
+
+
+
+def generate_image(prompt):
+    # Crear la tarea
+    payload = {
+        "prompt": prompt,   
+        "negative_prompt": "",   
+        "width": 768,   
+        "height": 768,   
+        "samples": 1,   
+        "seed": -1,   
+        "cfg_scale": 2.0,   
+        "steps": 9  
+    }
+
+    print("Starting to generate the image: " + prompt)
+    response = requests.post(base_url, json=payload, cookies=cookies)
+
+    if response.status_code == 200:
+        # get answer data
+        response_data = response.json()
+        
+        # print answer
+        #print(json.dumps(response_data, indent=4))
+
+        if "images" in response_data:
+            image_base64 = response_data["images"][0]   
+            # decode image base64
+            image_data = base64.b64decode(image_base64)
+            
+            # save image
+            with open("generated_image.png", "wb") as img_file:
+                img_file.write(image_data)
+            print("Imagen generada con éxito.")
+        else:
+            print("The 'images' field was not found in the response.")
+    else:
+        print(f"Error generating image: {response.status_code}")
+        print(response.text)
+    return True
+
+# generate_image("image of a rock band")
