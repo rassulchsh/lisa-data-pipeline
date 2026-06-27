@@ -18,11 +18,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 try:
-    # Works when this file is invoked directly, as documented in the README.
-    from run_api_benchmark import extract_first_json_object
+    from json_extraction import JsonExtractionError, extract_first_json_object
 except ModuleNotFoundError:
-    # Also support importing this runner from the repository root in tests.
-    from evaluation.design_science_edit_ops.scripts.run_api_benchmark import (
+    from evaluation.design_science_edit_ops.scripts.json_extraction import (
+        JsonExtractionError,
         extract_first_json_object,
     )
 
@@ -620,9 +619,13 @@ def execute_benchmark(
             )
             synchronize_cuda(torch)
             latency_ms = round((time.perf_counter() - started) * 1000)
-            parsed, extraction_error_text = extract_first_json_object(generated_text)
+            try:
+                parsed = extract_first_json_object(generated_text)
+                extraction_error = None
+            except JsonExtractionError as exc:
+                parsed = None
+                extraction_error = str(exc)
             extraction_success = parsed is not None
-            extraction_error = None if extraction_success else extraction_error_text
 
             raw_record = build_raw_record(
                 args=args,
