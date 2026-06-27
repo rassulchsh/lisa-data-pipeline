@@ -32,7 +32,6 @@ Use the local LISA project in VS Code for:
 - Chart generation.
 - Report drafting.
 
-Use the university JupyterHub GPU server later only for local open-model inference.
 
 ## Planned Model Set
 
@@ -48,51 +47,4 @@ Current planned models:
 
 The folder contains the benchmark data, rendered prompts, API-reference and local-model runners, output validation, scoring, and aggregation scripts. Chart implementation remains future work.
 
-## Phase 7A Local Transformers Runner
 
-`scripts/run_local_transformers_benchmark.py` runs rendered prompts through a local Hugging Face causal language model. It is a dry run unless `--execute` is supplied, and dry runs do not import model libraries, download a model, or perform inference.
-
-Dry-run one selected prompt locally:
-
-```bash
-python evaluation/design_science_edit_ops/scripts/run_local_transformers_benchmark.py \
-  --model-id Qwen/Qwen3-8B \
-  --model-name qwen3_8b \
-  --limit 1
-```
-
-Start on JupyterHub with one quantized task:
-
-```bash
-python evaluation/design_science_edit_ops/scripts/run_local_transformers_benchmark.py \
-  --model-id Qwen/Qwen3-8B \
-  --model-name qwen3_8b \
-  --max-new-tokens 512 \
-  --limit 1 \
-  --load-in-4bit \
-  --execute \
-  --overwrite
-```
-
-Validate that one-task run:
-
-```bash
-python evaluation/design_science_edit_ops/scripts/validate_outputs.py \
-  --outputs evaluation/design_science_edit_ops/outputs/qwen3_8b \
-  --model qwen3_8b \
-  --out evaluation/design_science_edit_ops/results/raw_results_pilot_qwen3_8b_limit1.csv
-```
-
-After the one-task smoke test succeeds, run all ten pilot tasks:
-
-```bash
-python evaluation/design_science_edit_ops/scripts/run_local_transformers_benchmark.py \
-  --model-id Qwen/Qwen3-8B \
-  --model-name qwen3_8b \
-  --max-new-tokens 512 \
-  --load-in-4bit \
-  --execute \
-  --overwrite
-```
-
-Then validate the full output directory and aggregate its raw validation CSV with `validate_outputs.py` and `aggregate_results.py`. On JupyterHub, run one model at a time and always begin with `--limit 1` to verify model compatibility and GPU memory use.
