@@ -1,0 +1,8 @@
+expected_api_call,total_tasks,outputs_found,json_valid_rate,schema_valid_rate,api_call_accuracy,slide_target_accuracy,argument_complete_rate,traceability_complete_rate,replay_success_rate,validation_pass_rate
+edit_content,3,3,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000
+edit_slide,2,2,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000
+set_layout,1,1,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000
+move_slide,1,1,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000
+insert_slide_after,1,1,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000
+delete_slide,1,1,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000
+set_image,1,1,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000

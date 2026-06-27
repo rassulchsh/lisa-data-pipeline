@@ -1,0 +1,11 @@
+model,task_id,output_file_exists,json_valid,schema_valid,api_call_valid,api_call_correct,slide_target_valid,slide_target_correct,argument_complete,traceability_complete,replay_applicable,replay_check_skipped,replay_success,validation_passed,error_message
+gpt-5.4-mini,pilot_001,true,true,true,true,true,true,true,true,true,true,false,true,true,
+gpt-5.4-mini,pilot_002,true,true,true,true,true,true,true,true,true,true,false,true,true,
+gpt-5.4-mini,pilot_003,true,true,true,true,true,true,true,true,true,true,false,true,true,
+gpt-5.4-mini,pilot_004,true,true,true,true,true,true,true,true,true,true,false,true,true,
+gpt-5.4-mini,pilot_005,true,true,true,true,true,true,true,true,true,true,false,true,true,
+gpt-5.4-mini,pilot_006,true,true,true,true,true,true,true,true,true,true,false,true,true,
+gpt-5.4-mini,pilot_007,true,true,true,true,true,true,true,true,true,true,false,true,true,
+gpt-5.4-mini,pilot_008,true,true,true,true,true,true,true,true,true,true,false,true,true,
+gpt-5.4-mini,pilot_009,true,true,true,true,true,true,true,true,true,true,false,true,true,
+gpt-5.4-mini,pilot_010,true,true,true,true,true,true,true,true,true,true,false,true,true,

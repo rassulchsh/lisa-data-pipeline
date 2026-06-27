@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Design Science Slide Edit Operation",
+  "description": "Expected structured output for the Design Science slide-edit operation benchmark.",
+  "type": "object",
+  "required": [
+    "api_call",
+    "arguments",
+    "reason",
+    "review_status"
+  ],
+  "properties": {
+    "api_call": {
+      "type": "string",
+      "enum": [
+        "edit_content",
+        "edit_slide",
+        "set_layout",
+        "move_slide",
+        "insert_slide_after",
+        "delete_slide",
+        "set_image"
+      ]
+    },
+    "slide_no": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "arguments": {
+      "type": "object"
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "review_status": {
+      "const": "pending"
+    }
+  },
+  "additionalProperties": false
+}

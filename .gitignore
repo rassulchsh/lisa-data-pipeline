@@ -13,13 +13,30 @@ __pycache__/
 .env
 .openapi-cache/
 
+# LLM response cache (generated, never commit)
+.cache/
+
 # editor & OS
 .vscode/
 .DS_Store
 
 # datasets & exports (generated)
 dataset/dialogs/en/drafts/
+dataset/dialogs/en/drafts_v2/
 dataset/dialogs/en/processed/
 logs/
-dataset/dialogs/en/drafts_dedup
+dataset/dialogs/en/drafts_dedup/
+dataset/dialogs/en/drafts_dedup_v2/
+exports/
 
+
+
+# C2e downloaded source-figure render cache
+dataset/assets/figures/
+
+# Design Science edit-operation benchmark local model artifacts
+evaluation/design_science_edit_ops/.cache/
+evaluation/design_science_edit_ops/models/
+evaluation/design_science_edit_ops/**/*.safetensors
+evaluation/design_science_edit_ops/**/*.bin
+evaluation/design_science_edit_ops/**/*.pt

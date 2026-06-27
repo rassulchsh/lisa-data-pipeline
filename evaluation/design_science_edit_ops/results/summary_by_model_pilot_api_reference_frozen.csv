@@ -1,0 +1,2 @@
+model,total_tasks,outputs_found,missing_outputs,json_valid_rate,schema_valid_rate,api_call_valid_rate,api_call_accuracy,slide_target_valid_rate,slide_target_accuracy,argument_complete_rate,traceability_complete_rate,replay_success_rate,validation_pass_rate
+gpt-5.4-mini,10,10,0,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000
