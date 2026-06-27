@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the edit-operation benchmark with a local Hugging Face causal LM.
+"""Run the edit-operation benchmark with a local Hugging Face model.
 
 The runner is deliberately a dry run unless ``--execute`` is supplied. Dry
 runs load only the rendered JSONL and never import torch, Transformers, or
@@ -13,6 +13,7 @@ import argparse
 import csv
 import json
 import random
+import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
@@ -32,6 +33,7 @@ MANIFEST_FIELDS = [
     "task_id",
     "model_name",
     "model_id",
+    "loader",
     "output_path",
     "raw_output_path",
     "skipped_existing",
@@ -73,6 +75,12 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         "--model-name",
         required=True,
         help="Short name used for output directories and manifest files.",
+    )
+    parser.add_argument(
+        "--loader",
+        choices=["auto_causal_lm", "multimodal_lm"],
+        default="auto_causal_lm",
+        help="Model loading/generation backend. Use multimodal_lm for Gemma 4.",
     )
     parser.add_argument(
         "--out-dir",
@@ -307,6 +315,7 @@ def manifest_row(
         "task_id": task_id,
         "model_name": args.model_name,
         "model_id": args.model_id or "",
+        "loader": args.loader,
         "output_path": str(output_path),
         "raw_output_path": str(raw_output_path),
         "skipped_existing": str(skipped_existing).lower(),
@@ -347,13 +356,15 @@ def build_raw_record(
     *,
     args: argparse.Namespace,
     record: Mapping[str, Any],
-    formatted_prompt: str,
+    formatted_prompt: Optional[str],
     generated_text: str,
+    parsed_response: Any,
     extraction_success: bool,
     extraction_error: Optional[str],
     latency_ms: int,
     gpu_info: Mapping[str, Any],
     chat_template_error: Optional[str] = None,
+    parse_response_error: Optional[str] = None,
     generation_error: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Build one raw generation/debug record without any credentials."""
@@ -361,9 +372,11 @@ def build_raw_record(
         "task_id": record["task_id"],
         "model_name": args.model_name,
         "model_id": args.model_id,
+        "loader": args.loader,
         "prompt": record["prompt"],
         "formatted_prompt": formatted_prompt,
         "generated_text": generated_text,
+        "parsed_response": parsed_response,
         "extraction_success": extraction_success,
         "extraction_error": extraction_error,
         "latency_ms": latency_ms,
@@ -379,6 +392,8 @@ def build_raw_record(
     raw.update(gpu_info)
     if chat_template_error:
         raw["chat_template_error"] = chat_template_error
+    if parse_response_error:
+        raw["parse_response_error"] = parse_response_error
     if generation_error:
         raw["generation_error"] = generation_error
     return raw
@@ -400,6 +415,7 @@ def print_summary(
     print(f"provider: {PROVIDER}")
     print(f"model_id: {args.model_id or ''}")
     print(f"model_name: {args.model_name}")
+    print(f"loader: {args.loader}")
     print(f"rendered_prompts_loaded: {loaded}")
     print(f"tasks_selected: {selected}")
     print(f"execute: {str(args.execute).lower()}")
@@ -453,8 +469,8 @@ def resolve_torch_dtype(torch: Any, dtype: str) -> Any:
     }[dtype]
 
 
-def load_model_stack(args: argparse.Namespace) -> Tuple[Any, Any, Any]:
-    """Lazily import dependencies and load the tokenizer/model for execute mode."""
+def prepare_execute_runtime(args: argparse.Namespace) -> Tuple[Any, Any]:
+    """Import heavyweight dependencies and seed them only in execute mode."""
     try:
         import torch
     except Exception as exc:
@@ -463,18 +479,33 @@ def load_model_stack(args: argparse.Namespace) -> Tuple[Any, Any, Any]:
         ) from exc
 
     try:
-        from transformers import (
-            AutoModelForCausalLM,
-            AutoTokenizer,
-            BitsAndBytesConfig,
-            set_seed,
-        )
+        import transformers
     except Exception as exc:
         raise RuntimeError(
             "could not import Hugging Face Transformers for --execute: "
             f"{type(exc).__name__}: {exc}"
         ) from exc
 
+    random.seed(args.seed)
+    transformers.set_seed(args.seed)
+    torch.manual_seed(args.seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(args.seed)
+    return torch, transformers
+
+
+def model_load_kwargs(
+    args: argparse.Namespace,
+    torch: Any,
+    transformers: Any,
+    *,
+    dtype_keyword: str,
+) -> Dict[str, Any]:
+    """Build shared causal/multimodal loading and quantization options."""
+    kwargs: Dict[str, Any] = {
+        "device_map": args.device_map,
+        "trust_remote_code": args.trust_remote_code,
+    }
     if args.load_in_4bit or args.load_in_8bit:
         try:
             import bitsandbytes  # noqa: F401
@@ -483,36 +514,91 @@ def load_model_stack(args: argparse.Namespace) -> Tuple[Any, Any, Any]:
                 "could not import bitsandbytes for quantized execution: "
                 f"{type(exc).__name__}: {exc}"
             ) from exc
+    if args.load_in_4bit:
+        kwargs["quantization_config"] = transformers.BitsAndBytesConfig(
+            load_in_4bit=True
+        )
+    elif args.load_in_8bit:
+        kwargs["quantization_config"] = transformers.BitsAndBytesConfig(
+            load_in_8bit=True
+        )
+    else:
+        kwargs[dtype_keyword] = resolve_torch_dtype(torch, args.dtype)
+    return kwargs
 
-    random.seed(args.seed)
-    set_seed(args.seed)
-    torch.manual_seed(args.seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(args.seed)
+
+def load_auto_causal_lm(
+    args: argparse.Namespace, torch: Any, transformers: Any
+) -> Tuple[Any, Any]:
+    """Load the existing AutoTokenizer + AutoModelForCausalLM backend."""
+    model_kwargs = model_load_kwargs(
+        args,
+        torch,
+        transformers,
+        dtype_keyword="torch_dtype",
+    )
+    tokenizer = transformers.AutoTokenizer.from_pretrained(
+        args.model_id,
+        trust_remote_code=args.trust_remote_code,
+    )
+    model = transformers.AutoModelForCausalLM.from_pretrained(
+        args.model_id, **model_kwargs
+    )
+    model.eval()
+    return tokenizer, model
+
+
+def load_multimodal_lm(
+    args: argparse.Namespace, torch: Any, transformers: Any
+) -> Tuple[Any, Any]:
+    """Load the Gemma 4 AutoProcessor + AutoModelForMultimodalLM backend."""
+    try:
+        model_class = transformers.AutoModelForMultimodalLM
+    except (AttributeError, ImportError) as exc:
+        raise RuntimeError(
+            "Gemma 4 requires a newer Transformers version supporting "
+            "AutoModelForMultimodalLM"
+        ) from exc
+
+    model_kwargs = model_load_kwargs(
+        args,
+        torch,
+        transformers,
+        dtype_keyword="dtype",
+    )
+    processor = transformers.AutoProcessor.from_pretrained(
+        args.model_id,
+        trust_remote_code=args.trust_remote_code,
+    )
+    model = model_class.from_pretrained(args.model_id, **model_kwargs)
+    model.eval()
+    return processor, model
+
+
+def load_model_stack(args: argparse.Namespace) -> Tuple[Any, Any, Any, Any]:
+    """Load the selected execute-only model backend and generation function."""
+    torch, transformers = prepare_execute_runtime(args)
 
     try:
-        model_kwargs: Dict[str, Any] = {
-            "device_map": args.device_map,
-            "trust_remote_code": args.trust_remote_code,
-        }
-        if args.load_in_4bit:
-            model_kwargs["quantization_config"] = BitsAndBytesConfig(load_in_4bit=True)
-        elif args.load_in_8bit:
-            model_kwargs["quantization_config"] = BitsAndBytesConfig(load_in_8bit=True)
+        if args.loader == "auto_causal_lm":
+            frontend, model = load_auto_causal_lm(args, torch, transformers)
+            generate_fn = generate_with_auto_causal_lm
+        elif args.loader == "multimodal_lm":
+            frontend, model = load_multimodal_lm(args, torch, transformers)
+            generate_fn = generate_with_multimodal_lm
         else:
-            model_kwargs["torch_dtype"] = resolve_torch_dtype(torch, args.dtype)
-
-        tokenizer = AutoTokenizer.from_pretrained(
-            args.model_id,
-            trust_remote_code=args.trust_remote_code,
-        )
-        model = AutoModelForCausalLM.from_pretrained(args.model_id, **model_kwargs)
-        model.eval()
+            raise ValueError(f"unsupported loader: {args.loader}")
     except Exception as exc:
+        quantization = (
+            "4-bit"
+            if args.load_in_4bit
+            else "8-bit" if args.load_in_8bit else "unquantized"
+        )
         raise RuntimeError(
-            f"failed to load local model '{args.model_id}': {type(exc).__name__}: {exc}"
+            f"failed to load local model '{args.model_id}' with loader "
+            f"'{args.loader}' ({quantization}): {type(exc).__name__}: {exc}"
         ) from exc
-    return torch, tokenizer, model
+    return torch, frontend, model, generate_fn
 
 
 def synchronize_cuda(torch: Any) -> None:
@@ -524,15 +610,18 @@ def synchronize_cuda(torch: Any) -> None:
         pass
 
 
-def generate_text(
-    *,
-    torch: Any,
+def generate_with_auto_causal_lm(
     tokenizer: Any,
     model: Any,
-    formatted_prompt: str,
+    messages: Any,
+    prompt: str,
     args: argparse.Namespace,
-) -> str:
-    """Generate and decode only tokens produced after the formatted prompt."""
+) -> Dict[str, Any]:
+    """Format, generate, and decode with the existing causal LM backend."""
+    formatted_prompt, chat_template_error = format_prompt(
+        tokenizer,
+        {"prompt": prompt, "messages": messages},
+    )
     inputs = tokenizer(formatted_prompt, return_tensors="pt")
     inputs = inputs.to(model.device)
     prompt_length = inputs["input_ids"].shape[-1]
@@ -551,11 +640,119 @@ def generate_text(
     if pad_token_id is not None:
         generation_kwargs["pad_token_id"] = pad_token_id
 
-    with torch.no_grad():
-        output_ids = model.generate(**inputs, **generation_kwargs)
+    output_ids = model.generate(**inputs, **generation_kwargs)
     sequences = getattr(output_ids, "sequences", output_ids)
     generated_ids = sequences[0, prompt_length:]
-    return tokenizer.decode(generated_ids, skip_special_tokens=True)
+    generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
+    return {
+        "formatted_prompt": formatted_prompt,
+        "generated_text": generated_text,
+        "parsed_response": None,
+        "extraction_text": generated_text,
+        "chat_template_error": chat_template_error,
+        "parse_response_error": None,
+    }
+
+
+def move_inputs_to_model_device(inputs: Any, model: Any) -> Any:
+    """Move a processor batch (or its tensor values) to the model device."""
+    device = getattr(model, "device", None)
+    if device is None:
+        raise RuntimeError("loaded model does not expose a device")
+
+    move_batch = getattr(inputs, "to", None)
+    if callable(move_batch):
+        moved = move_batch(device)
+        return inputs if moved is None else moved
+    if isinstance(inputs, Mapping):
+        return {
+            key: value.to(device) if callable(getattr(value, "to", None)) else value
+            for key, value in inputs.items()
+        }
+    raise TypeError("processor chat template did not return a movable input batch")
+
+
+def json_safe_value(value: Any) -> Any:
+    """Keep parse-response diagnostics serializable without hiding their value."""
+    try:
+        json.dumps(value, ensure_ascii=False)
+        return value
+    except (TypeError, ValueError):
+        try:
+            return str(value)
+        except Exception:
+            return f"<{type(value).__name__}>"
+
+
+def generate_with_multimodal_lm(
+    processor: Any,
+    model: Any,
+    messages: Any,
+    prompt: str,
+    args: argparse.Namespace,
+) -> Dict[str, Any]:
+    """Generate with Gemma 4's processor/multimodal-model interface."""
+    chat_messages = valid_messages(messages)
+    if chat_messages is None:
+        chat_messages = [{"role": "user", "content": prompt}]
+
+    try:
+        inputs = processor.apply_chat_template(
+            chat_messages,
+            tokenize=True,
+            return_dict=True,
+            return_tensors="pt",
+            add_generation_prompt=True,
+            enable_thinking=False,
+        )
+    except TypeError:
+        inputs = processor.apply_chat_template(
+            chat_messages,
+            tokenize=True,
+            return_dict=True,
+            return_tensors="pt",
+            add_generation_prompt=True,
+        )
+
+    inputs = move_inputs_to_model_device(inputs, model)
+    input_len = inputs["input_ids"].shape[-1]
+    generation_kwargs: Dict[str, Any] = {
+        "max_new_tokens": args.max_new_tokens,
+    }
+    if args.do_sample:
+        generation_kwargs.update(
+            {
+                "do_sample": True,
+                "temperature": args.temperature,
+                "top_p": args.top_p,
+            }
+        )
+    else:
+        generation_kwargs["do_sample"] = False
+
+    outputs = model.generate(**inputs, **generation_kwargs)
+    sequences = getattr(outputs, "sequences", outputs)
+    generated_ids = sequences[0][input_len:]
+    response = processor.decode(generated_ids, skip_special_tokens=False)
+
+    parsed_response: Any = None
+    parse_response_error: Optional[str] = None
+    parse_response = getattr(processor, "parse_response", None)
+    if callable(parse_response):
+        try:
+            parsed_response = parse_response(response)
+        except Exception as exc:
+            parse_response_error = f"{type(exc).__name__}: {exc}"
+
+    extraction_text = parsed_response if isinstance(parsed_response, str) else response
+    return {
+        "formatted_prompt": None,
+        "generated_text": response,
+        "parsed_response": json_safe_value(parsed_response),
+        "extraction_text": extraction_text,
+        "chat_template_error": None,
+        "parse_response_error": parse_response_error,
+    }
 
 
 def execute_benchmark(
@@ -571,7 +768,7 @@ def execute_benchmark(
     if args.do_sample and not 0 < args.top_p <= 1:
         raise RuntimeError("--do-sample requires --top-p in the interval (0, 1]")
 
-    torch, tokenizer, model = load_model_stack(args)
+    torch, frontend, model, generate_fn = load_model_stack(args)
     manifest_rows: List[Dict[str, Any]] = []
     outputs_written = 0
     raw_outputs_written = 0
@@ -602,47 +799,59 @@ def execute_benchmark(
         if args.overwrite and output_path.exists():
             output_path.unlink()
 
-        formatted_prompt = str(record["prompt"])
+        formatted_prompt: Optional[str] = (
+            str(record["prompt"]) if args.loader == "auto_causal_lm" else None
+        )
         chat_template_error: Optional[str] = None
+        parse_response_error: Optional[str] = None
         generated_text = ""
+        parsed_response: Any = None
         started = time.perf_counter()
         try:
-            formatted_prompt, chat_template_error = format_prompt(tokenizer, record)
             synchronize_cuda(torch)
             started = time.perf_counter()
-            generated_text = generate_text(
-                torch=torch,
-                tokenizer=tokenizer,
-                model=model,
-                formatted_prompt=formatted_prompt,
-                args=args,
-            )
+            with torch.no_grad():
+                generation = generate_fn(
+                    frontend,
+                    model,
+                    record.get("messages"),
+                    str(record["prompt"]),
+                    args,
+                )
             synchronize_cuda(torch)
             latency_ms = round((time.perf_counter() - started) * 1000)
+            formatted_prompt = generation["formatted_prompt"]
+            generated_text = generation["generated_text"]
+            parsed_response = generation["parsed_response"]
+            extraction_text = generation["extraction_text"]
+            chat_template_error = generation["chat_template_error"]
+            parse_response_error = generation["parse_response_error"]
             try:
-                parsed = extract_first_json_object(generated_text)
+                extracted_json = extract_first_json_object(extraction_text)
                 extraction_error = None
             except JsonExtractionError as exc:
-                parsed = None
+                extracted_json = None
                 extraction_error = str(exc)
-            extraction_success = parsed is not None
+            extraction_success = extracted_json is not None
 
             raw_record = build_raw_record(
                 args=args,
                 record=record,
                 formatted_prompt=formatted_prompt,
                 generated_text=generated_text,
+                parsed_response=parsed_response,
                 extraction_success=extraction_success,
                 extraction_error=extraction_error,
                 latency_ms=latency_ms,
                 gpu_info=gpu_diagnostics(torch),
                 chat_template_error=chat_template_error,
+                parse_response_error=parse_response_error,
             )
             write_json(raw_output_path, raw_record)
             raw_outputs_written += 1
 
-            if extraction_success and parsed is not None:
-                write_json(output_path, parsed)
+            if extraction_success and extracted_json is not None:
+                write_json(output_path, extracted_json)
                 outputs_written += 1
                 extraction_success_count += 1
             else:
@@ -664,17 +873,20 @@ def execute_benchmark(
             synchronize_cuda(torch)
             latency_ms = round((time.perf_counter() - started) * 1000)
             error = f"{type(exc).__name__}: {exc}"
+            print(f"task_error[{task_id}]: {error}", file=sys.stderr)
             error_count += 1
             raw_record = build_raw_record(
                 args=args,
                 record=record,
                 formatted_prompt=formatted_prompt,
                 generated_text=generated_text,
+                parsed_response=parsed_response,
                 extraction_success=False,
                 extraction_error="generation failed before JSON extraction",
                 latency_ms=latency_ms,
                 gpu_info=gpu_diagnostics(torch),
                 chat_template_error=chat_template_error,
+                parse_response_error=parse_response_error,
                 generation_error=error,
             )
             write_json(raw_output_path, raw_record)
