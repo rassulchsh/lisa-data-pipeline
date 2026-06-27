@@ -1,0 +1,9 @@
+{
+  "api_call": "move_slide",
+  "slide_no": 8,
+  "arguments": {
+    "after_slide_no": 6
+  },
+  "reason": "Deterministic gold output for validator compatibility testing.",
+  "review_status": "pending"
+}

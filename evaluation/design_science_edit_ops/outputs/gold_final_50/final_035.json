@@ -1,0 +1,10 @@
+{
+  "api_call": "set_image",
+  "slide_no": 7,
+  "arguments": {
+    "image_intent": "decorative",
+    "instruction": "Add a relevant conceptual visual only."
+  },
+  "reason": "Deterministic gold output for validator compatibility testing.",
+  "review_status": "pending"
+}

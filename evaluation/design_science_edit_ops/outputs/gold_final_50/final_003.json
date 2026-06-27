@@ -1,0 +1,9 @@
+{
+  "api_call": "set_layout",
+  "slide_no": 3,
+  "arguments": {
+    "layout": "TwoColumn"
+  },
+  "reason": "Deterministic gold output for validator compatibility testing.",
+  "review_status": "pending"
+}

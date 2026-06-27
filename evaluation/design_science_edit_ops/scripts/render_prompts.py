@@ -101,8 +101,10 @@ def require_task_fields(task: Dict[str, Any], path: Path, line_no: int) -> None:
         raise ValueError(f"{path}:{line_no}: missing required field(s): {', '.join(missing)}")
     if not isinstance(task["task_id"], str) or not task["task_id"].strip():
         raise ValueError(f"{path}:{line_no}: task_id must be a non-empty string")
-    if not isinstance(task["deck_state"], dict):
-        raise ValueError(f"{path}:{line_no}: deck_state must be an object")
+    if not isinstance(task["deck_state"], (dict, list)):
+        raise ValueError(f"{path}:{line_no}: deck_state must be an object or slide list")
+    if isinstance(task["deck_state"], list) and not task["deck_state"]:
+        raise ValueError(f"{path}:{line_no}: deck_state slide list must not be empty")
     if not isinstance(task["user_request"], str) or not task["user_request"].strip():
         raise ValueError(f"{path}:{line_no}: user_request must be a non-empty string")
 
@@ -127,14 +129,10 @@ def render_prompt(template: str, task: Dict[str, Any]) -> str:
 
 
 def build_rendered_record(task: Dict[str, Any], prompt: str) -> Dict[str, Any]:
-    """Build one JSONL record for model-input preparation."""
+    """Build one model-input record without copying hidden gold labels."""
     return {
         "task_id": task["task_id"],
         "deck_id": task.get("deck_id"),
-        "operation_group": task.get("operation_group"),
-        "expected_api_call": task.get("expected_api_call"),
-        "expected_slide_no": task.get("expected_slide_no"),
-        "replay_applicable": task.get("replay_applicable"),
         "prompt": prompt,
         "messages": [
             {
@@ -165,15 +163,12 @@ def write_preview(records: List[Dict[str, Any]], path: Path, preview_count: int)
     """Write a readable Markdown preview of the first rendered prompts."""
     path.parent.mkdir(parents=True, exist_ok=True)
     selected = records[: max(0, preview_count)]
-    lines = ["# Prompt Preview - Pilot Benchmark", ""]
+    lines = ["# Prompt Preview - Edit-Operation Benchmark", ""]
 
     for record in selected:
         lines.extend(
             [
                 f"## {record['task_id']}",
-                "",
-                f"Expected API call: {record.get('expected_api_call')}",
-                f"Expected slide: {record.get('expected_slide_no')}",
                 "",
                 "```text",
                 record["prompt"],

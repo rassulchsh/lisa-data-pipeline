@@ -175,7 +175,13 @@ def fallback_schema_check(data: Dict[str, Any], schema: Dict[str, Any]) -> Tuple
 
 def existing_slide_numbers(task: Dict[str, Any]) -> set[int]:
     """Return slide numbers present in a benchmark task deck_state."""
-    slides = ((task.get("deck_state") or {}).get("slides") or [])
+    deck_state = task.get("deck_state")
+    if isinstance(deck_state, list):
+        slides = deck_state
+    elif isinstance(deck_state, dict):
+        slides = deck_state.get("slides") or []
+    else:
+        slides = []
     return {
         slide.get("slide_no")
         for slide in slides

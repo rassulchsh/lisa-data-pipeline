@@ -1,0 +1,11 @@
+{
+  "api_call": "insert_slide_after",
+  "slide_no": 3,
+  "arguments": {
+    "after_slide_no": 3,
+    "title": "Transition",
+    "instruction": "Connect the surrounding sections briefly."
+  },
+  "reason": "Deterministic gold output for validator compatibility testing.",
+  "review_status": "pending"
+}

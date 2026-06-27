@@ -1,0 +1,9 @@
+{
+  "api_call": "edit_slide",
+  "slide_no": 3,
+  "arguments": {
+    "instruction": "Apply only the requested title or slide-framing edit."
+  },
+  "reason": "Deterministic gold output for validator compatibility testing.",
+  "review_status": "pending"
+}

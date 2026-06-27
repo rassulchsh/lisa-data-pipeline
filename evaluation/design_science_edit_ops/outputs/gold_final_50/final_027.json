@@ -1,0 +1,7 @@
+{
+  "api_call": "delete_slide",
+  "slide_no": 8,
+  "arguments": {},
+  "reason": "Deterministic gold output for validator compatibility testing.",
+  "review_status": "pending"
+}

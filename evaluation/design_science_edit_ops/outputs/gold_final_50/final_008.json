@@ -1,0 +1,10 @@
+{
+  "api_call": "edit_content",
+  "slide_no": 4,
+  "arguments": {
+    "target": "bullets",
+    "instruction": "Apply only the requested bullet-content edit and preserve constraints."
+  },
+  "reason": "Deterministic gold output for validator compatibility testing.",
+  "review_status": "pending"
+}

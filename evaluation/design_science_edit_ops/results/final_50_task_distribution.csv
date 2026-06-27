@@ -1,0 +1,11 @@
+dimension,value,count,target_count
+operation,edit_content,12,12
+operation,edit_slide,8,8
+operation,set_layout,7,7
+operation,move_slide,7,7
+operation,insert_slide_after,6,6
+operation,delete_slide,5,5
+operation,set_image,5,5
+difficulty,easy,10,10
+difficulty,medium,25,25
+difficulty,hard,15,15
