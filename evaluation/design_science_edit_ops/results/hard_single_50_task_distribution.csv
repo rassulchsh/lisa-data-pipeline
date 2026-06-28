@@ -1,0 +1,8 @@
+operation,target_count,selected_count,deviation
+edit_content,10,7,-3
+edit_slide,8,9,1
+set_layout,7,7,0
+move_slide,7,8,1
+insert_slide_after,7,8,1
+delete_slide,5,5,0
+set_image,6,6,0
